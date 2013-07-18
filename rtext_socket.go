@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"flag"
 	"fmt"
 	_index "github.com/comdeng/rtext/index"
@@ -8,12 +9,11 @@ import (
 	"io"
 	"log"
 	"net"
+	"strconv"
+	"strings"
 )
 
 const (
-	WRITE            = "SET"
-	GET              = "GET"
-	EXISTS           = "EXISTS"
 	STATUS_NOT_FOUND = 4
 	STATUS_NO        = 3
 	STATUS_YES       = 2
@@ -24,16 +24,36 @@ type handler func(req *rtextRequest) *rtextResponse
 
 var port *int = flag.Int("port", 8890, "Port on which to listen")
 var handlers map[string]handler = map[string]handler{
-	GET:    handleGet,
-	WRITE:  handleWrite,
-	EXISTS: handleExists,
+	"/text/get":    handleGet,
+	"/text/write":  handleWrite,
+	"/text/exists": handleExists,
 }
 
 type rtextRequest struct {
-	opCode string
-	textId uint64
-	flag   uint8
-	data   []byte
+	url  string
+	data map[string]string
+}
+
+func (rr *rtextRequest) Receive(r io.Reader, hdrBytes []byte) error {
+	buf := new(bytes.Buffer)
+	buf.ReadFrom(r)
+
+	url, _ := buf.ReadString("\0")
+
+	for {
+		b := buf.ReadByte()
+		if b != byte("\0") {
+			key, _ := buf.ReadString(":")
+			length, _ := strconv.buf.ReadString(":")
+			data := make([]byte, length)
+			buf.Read(data)
+			rr.data[key] = string(data)
+		} else {
+			break
+		}
+	}
+	rr.url = url
+	rr.data = data
 }
 
 type rtextResponse struct {
@@ -50,6 +70,27 @@ type reqHandler struct {
 	ch chan chanReq
 }
 
+func (rh reqHandler) HandleMessage(w io.Writer, req *rtextRequest) *rtextResponse {
+	cr := &chanReq{
+		req,
+		make(chan *rtextResponse),
+	}
+	rh.ch <- cr
+	return <-cr.res
+}
+
+// Request handler for doing server stuff.
+type RequestHandler interface {
+	// Handle a message from the client.
+	// If the message should cause the connection to terminate,
+	// the Fatal flag should be set.  If the message requires no
+	// response, return nil
+	//
+	// Most clients should ignore the io.Writer unless they want
+	// complete control over the response.
+	HandleMessage(io.Writer, *rtextRequest) *rtextResponse
+}
+
 func waitForConnections(ls net.Listener) {
 	reqChannel := make(chan chanReq)
 
@@ -61,7 +102,7 @@ func waitForConnections(ls net.Listener) {
 		s, e := ls.Accept()
 		if e == nil {
 			log.Printf("Got a connection from %v", s.RemoteAddr())
-			go handlerIO(s, handler)
+			go handleIO(s, handler)
 		} else {
 			log.Printf("Error accepting from %s", ls)
 		}
@@ -92,7 +133,7 @@ func runServer(input chan chanReq) {
 }
 
 func dispatch(req *rtextRequest) (res *rtextResponse) {
-	if h, ok := handlers[req.opCode]; !ok {
+	if h, ok := handlers[req.url]; !ok {
 		res.status = STATUS_NOT_FOUND
 	} else {
 		h(req)
@@ -113,9 +154,10 @@ func main() {
 
 // 处理获取文本的请求
 func handleGet(req *rtextRequest) (ret *rtextResponse) {
-	if req.textId < 1 {
+	textId := uint64(strconv.Atoi(req.data["textId"]))
+	if textId < 1 {
 		ret.status = STATUS_ERROR
-	} else if _index.Exists(req.textId) {
+	} else if _index.Exists(textId) {
 		ret.status = STATUS_YES
 	} else {
 		ret.status = STATUS_NOT_FOUND
@@ -125,9 +167,10 @@ func handleGet(req *rtextRequest) (ret *rtextResponse) {
 
 // 写文本操作
 func handleWrite(req *rtextRequest) (ret *rtextResponse) {
-	if req.textId > 1 && len(req.data) > 0 {
-		if !_index.Exists(req.textId) {
-			doTextWrite(req.textId, req.data, req.flag)
+	textId := uint64(strconv.Atoi(req.data["textId"]))
+	if textId > 1 && len(req.data["text"]) > 0 {
+		if !_index.Exists(textId) {
+			doTextWrite(textId, byte[](req.data["text"]), uint8(strconv.Atoi(req.data["flag"]))
 			ret.status = STATUS_YES
 		}
 	} else {
@@ -157,9 +200,10 @@ func doTextWrite(textId uint64, txt []byte, flag uint8) {
 }
 
 func handleExists(req *rtextRequest) (ret *rtextResponse) {
-	if req.textId < 1 {
+	textId := uint64(strconv.Atoi(req.data["textId"]))
+	if textId < 1 {
 		ret.status = STATUS_ERROR
-	} else if _index.Exists(req.textId) {
+	} else if _index.Exists(textId) {
 		ret.status = STATUS_YES
 	} else {
 		ret.status = STATUS_NO
