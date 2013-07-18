@@ -14,6 +14,9 @@ func main() {
 	http.HandleFunc("/text/write/", textWrite)
 	http.HandleFunc("/text/get/", textGet)
 
+	// 构建索引的map
+	_index.Build()
+
 	err := http.ListenAndServe(":8889", nil)
 	if err != nil {
 		log.Fatal("ListenAndServe: ", err.Error())
@@ -23,18 +26,18 @@ func main() {
 // 文本是否存在
 func textExists(w http.ResponseWriter, r *http.Request) {
 	if r.Method == "GET" {
-		log.Printf("/text/exists/?textId=%s", r.FormValue("textId"))
+		//log.Printf("/text/exists/?textId=%s", r.FormValue("textId"))
 
 		textId, _ := strconv.ParseUint(r.FormValue("textId"), 10, 64)
 
 		if textId < 1 {
-			log.Println("textExists.u_textId_illegal")
+			//log.Println("textExists.u_textId_illegal")
 			io.WriteString(w, "-1")
-		} else if _index.IndexExists(textId) {
-			log.Printf("exists")
+		} else if _index.Exists(textId) {
+			//log.Printf("exists")
 			io.WriteString(w, "1")
 		} else {
-			log.Printf("notexists")
+			//log.Printf("notexists")
 			io.WriteString(w, "0")
 		}
 	}
@@ -42,22 +45,21 @@ func textExists(w http.ResponseWriter, r *http.Request) {
 
 func textGet(w http.ResponseWriter, r *http.Request) {
 	if r.Method == "GET" {
-		log.Printf("/text/get/?textId=%s", r.FormValue("textId"))
+		//log.Printf("/text/get/?textId=%s", r.FormValue("textId"))
 
 		textId, _ := strconv.ParseUint(r.FormValue("textId"), 10, 64)
 
 		if textId < 1 {
-			log.Println("textGet.u_textId_illegal")
+			//log.Println("textGet.u_textId_illegal")
 			io.WriteString(w, "")
 		} else {
-			ii, ok := _index.GetIndexInfo(textId)
+			ii, ok := _index.Read(textId)
 			if !ok {
-				io.WriteString(w, "2")
+				io.WriteString(w, "-1")
 			}
-			log.Print(ii)
+			//log.Print(ii)
 			if text, ok := _text.Read(ii.FileIndex, ii.FilePos, ii.Length); ok {
-				//io.WriteString(w, "1")
-				log.Print(text)
+				io.WriteString(w, "1"+strconv.Itoa(int(ii.Flag)))
 				io.WriteString(w, string(text))
 			} else {
 				io.WriteString(w, "0")
@@ -69,20 +71,23 @@ func textGet(w http.ResponseWriter, r *http.Request) {
 // 文本写入
 func textWrite(w http.ResponseWriter, r *http.Request) {
 	if r.Method == "POST" {
-		log.Printf("/text/write/?textId=%s&ctag=%s", r.FormValue("textId"), r.FormValue("ctag"))
 
-		ctag, _ := strconv.Atoi(r.FormValue("ctag"))
-		if ctag != 1 && ctag != 0 {
-			log.Println("textWrite.u_ctag_illegal")
+		flag, _ := strconv.Atoi(r.FormValue("flag"))
+		if flag != 1 && flag != 0 {
+			//log.Println("textWrite.u_flag_illegal")
 			io.WriteString(w, "-1")
 			return
 		}
 		text := r.FormValue("text")
 		textId, _ := strconv.ParseUint(r.FormValue("textId"), 10, 64)
 
+		//log.Printf("/text/write/?textId=%d&flag=%d", textId, flag)
+
 		if textId > 1 && len(text) > 0 {
-			doTextWrite(textId, []byte(text), uint8(ctag))
-			io.WriteString(w, "1")
+			if !_index.Exists(textId) {
+				doTextWrite(textId, []byte(text), uint8(flag))
+				io.WriteString(w, "1")
+			}
 		} else {
 			io.WriteString(w, "0")
 		}
@@ -90,7 +95,7 @@ func textWrite(w http.ResponseWriter, r *http.Request) {
 }
 
 // 写入文本内容
-func doTextWrite(textId uint64, txt []byte, ctag uint8) {
+func doTextWrite(textId uint64, txt []byte, flag uint8) {
 	if len(txt) > 65535 {
 		panic("txt length is bigger than 65535")
 	}
@@ -99,7 +104,7 @@ func doTextWrite(textId uint64, txt []byte, ctag uint8) {
 	fileIndex, filePos := _text.Write(txt)
 	ii := &_index.IndexInfo{
 		textId,
-		ctag,
+		flag,
 		length,
 		fileIndex,
 		filePos,

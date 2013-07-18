@@ -1,7 +1,7 @@
 package text
 
 import (
-	"log"
+	//"log"
 	"os"
 	"strconv"
 )
@@ -9,7 +9,7 @@ import (
 var fileIndex uint8 = 0
 var filePos uint32 = 0
 
-const TEXT_FILE_PREFIX = "text_"
+const TEXT_FILE_PREFIX = "data/text_"
 
 // 写入文本内容
 // 返回文件索引和所在文件位置
@@ -20,9 +20,8 @@ func Write(text []byte) (fIndex uint8, fPos uint32) {
 		filePos = 0
 	}
 
-	path := TEXT_FILE_PREFIX + strconv.Itoa(int(fileIndex)) + ".text"
+	path := getFilePath(fileIndex)
 	if filePos == 0 {
-		log.Print(path)
 		fc, _ := os.Create(path)
 		fc.Close()
 	}
@@ -30,13 +29,19 @@ func Write(text []byte) (fIndex uint8, fPos uint32) {
 	fh, _ := os.OpenFile(path, os.O_APPEND, 0)
 	defer fh.Close()
 	fh.WriteAt(text, int64(filePos))
+	fPos = filePos
+
+	//log.Printf("text.Write fileIndex=%d,filePos=%d,length=%d", fileIndex, filePos, len(text))
+
 	filePos += uint32(len(text))
 	return
 }
 
 // 获取文本内容
 func Read(fIndex uint8, fPos uint32, length uint16) (text []byte, ok bool) {
-	path := TEXT_FILE_PREFIX + strconv.Itoa(int(fIndex)) + ".text"
+	//log.Printf("text.Read fileIndex=%d,filePos=%d,length=%d", fIndex, fPos, length)
+
+	path := getFilePath(fIndex)
 	fo, err1 := os.Open(path)
 	if err1 != nil {
 		ok = false
@@ -52,4 +57,8 @@ func Read(fIndex uint8, fPos uint32, length uint16) (text []byte, ok bool) {
 	}
 	ok = true
 	return
+}
+
+func getFilePath(fileIndex uint8) string {
+	return TEXT_FILE_PREFIX + strconv.Itoa(int(fileIndex)) + ".text"
 }
