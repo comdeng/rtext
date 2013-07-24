@@ -83,16 +83,21 @@ func (ii *IndexInfo) Write() {
 		fo.Close()
 	}
 
-	fh, _ := os.OpenFile(path, os.O_APPEND, 0)
+	fh, err := os.Create(path)
+	if err != nil {
+		panic(err)
+	}
 	defer fh.Close()
 
 	bytes := ii.Encode()
 
+	log.Println(bytes)
+	log.Println(int64(idxPos * INDEX_ROW_LENGTH))
 	fh.WriteAt(bytes, int64(idxPos*INDEX_ROW_LENGTH))
-	//log.Printf("index.Write textId=%d,idxIndex=%d,idxPos=%d,fileIndex=%d,filePos=%d,length=%d",
-	//	ii.TextId,
-	//	idxIndex, idxPos,
-	//	ii.FileIndex, ii.FilePos, ii.Length)
+	log.Printf("index.Write textId=%d,idxIndex=%d,idxPos=%d,fileIndex=%d,filePos=%d,length=%d",
+		ii.TextId,
+		idxIndex, idxPos,
+		ii.FileIndex, ii.FilePos, ii.Length)
 	mapIndex(ii.TextId, idxPos)
 	indexPoses[idxIndex]++
 }
@@ -124,10 +129,12 @@ func Read(textId uint64) (ii *IndexInfo, ok bool) {
 	ok = true
 	ii = new(IndexInfo)
 	ii.Decode(bytes)
-	//log.Printf("index.Read textId=%d,idxIndex=%d,idexPos=%d,fileIndex=%d,filePos=%d,length=%d",
-	//	textId, idxIndex, idxPos,
-	//	ii.FileIndex, ii.FilePos, ii.Length,
-	//)
+	/*
+		log.Printf("index.Read textId=%d,idxIndex=%d,idexPos=%d,fileIndex=%d,filePos=%d,length=%d",
+				textId, idxIndex, idxPos,
+			ii.FileIndex, ii.FilePos, ii.Length,
+		)
+	*/
 	return
 }
 
@@ -135,15 +142,19 @@ func Read(textId uint64) (ii *IndexInfo, ok bool) {
 func Build() {
 	log.Println("index.Build start")
 	start := time.Now()
+	indexTree = make(map[uint64]uint64)
+
+	ok := make(chan bool)
 	for i := uint8(0); i < INDEX_FILE_NUM; i++ {
-		buildFileIndexes(i)
+		go buildFileIndexes(i, ok)
 	}
+	<-ok
 	end := time.Now()
+	log.Print(indexTree)
 	log.Printf("index.Build end and cost %.2fms", float64(end.Sub(start)/1000000))
 }
 
-func buildFileIndexes(idxIndex uint8) {
-	indexTree = make(map[uint64]uint64)
+func buildFileIndexes(idxIndex uint8, ok chan bool) {
 	path := getFilePath(idxIndex)
 	fo, err := os.Open(path)
 	if err != nil {
@@ -163,6 +174,7 @@ func buildFileIndexes(idxIndex uint8) {
 		for ; index < TEXTID_BOUND_INDEX; index++ {
 			textId += (uint64(bytes[index]) << ((TEXTID_BOUND_INDEX - index - 1) << 3))
 		}
+
 		mapIndex(textId, idxPos)
 
 		// 从当前位置前移6位
@@ -170,6 +182,7 @@ func buildFileIndexes(idxIndex uint8) {
 
 		idxPos++
 	}
+	ok <- true
 }
 
 // 检查索引是否存在
