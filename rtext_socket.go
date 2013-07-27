@@ -9,6 +9,7 @@ import (
 	"log"
 	"net"
 	"strconv"
+	"time"
 	//"strings"
 )
 
@@ -28,6 +29,8 @@ var handlers map[string]handler = map[string]handler{
 	"/text/exists": handleExists,
 }
 
+var handleId uint64 = 0
+
 func waitForConnections(ls net.Listener) {
 	for {
 		conn, err := ls.Accept()
@@ -41,21 +44,38 @@ func waitForConnections(ls net.Listener) {
 
 // 处理连接
 func handleConnection(conn net.Conn) {
-	bs := make([]byte, 1024)
-	conn.Read(bs)
+	for {
+		bs := make([]byte, 1024)
+		n, _ := conn.Read(bs)
+		if n == 0 {
+			continue
+		}
+		if n == 1 && bs[0] == 1 {
+			log.Print("close")
+			conn.Close()
+			break
+		}
 
-	req := new(_socket.Request)
-	req.Decode(bs)
+		req := new(_socket.Request)
+		req.Decode(bs)
 
-	res := new(_socket.Response)
-	if h, ok := handlers[req.Url]; !ok {
-		res.Status = STATUS_NOT_FOUND
-	} else {
-		res := h(req)
-		buf := res.Encode()
-		log.Print(buf)
-		conn.Write(buf)
-		conn.Close()
+		res := new(_socket.Response)
+		if h, ok := handlers[req.Url]; !ok {
+			res.Status = STATUS_NOT_FOUND
+		} else {
+			handleId++
+			log.Printf("[%d]:handle start:%s", handleId, req.Url)
+			start := time.Now()
+			res := h(req)
+			buf := res.Encode()
+			length := len(buf)
+			conn.Write([]byte{uint8(length >> 8), uint8(length)})
+			conn.Write(buf)
+			end := time.Now()
+			log.Printf("[%d]:handle end %s, cost %.2fms", handleId, req.Url, float64(end.Sub(start)/1000000))
+			log.Print(buf)
+			//conn.Close()
+		}
 	}
 }
 
@@ -105,8 +125,8 @@ func handleWrite(req *_socket.Request) (ret *_socket.Response) {
 		if !_index.Exists(textId) {
 			flag, _ := strconv.Atoi(req.Data["flag"])
 			doTextWrite(textId, []byte(req.Data["text"]), uint8(flag))
-			ret.Status = STATUS_YES
 		}
+		ret.Status = STATUS_YES
 	} else {
 		ret.Status = STATUS_NO
 	}
@@ -141,7 +161,7 @@ func handleExists(req *_socket.Request) (ret *_socket.Response) {
 	} else if _index.Exists(textId) {
 		ret.Status = STATUS_YES
 	} else {
-		ret.Status = STATUS_NO
+		ret.Status = STATUS_NOT_FOUND
 	}
 	return
 }

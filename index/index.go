@@ -94,10 +94,11 @@ func (ii *IndexInfo) Write() {
 	log.Println(bytes)
 	log.Println(int64(idxPos * INDEX_ROW_LENGTH))
 	fh.WriteAt(bytes, int64(idxPos*INDEX_ROW_LENGTH))
-	log.Printf("index.Write textId=%d,idxIndex=%d,idxPos=%d,fileIndex=%d,filePos=%d,length=%d",
-		ii.TextId,
-		idxIndex, idxPos,
-		ii.FileIndex, ii.FilePos, ii.Length)
+	/*log.Printf("index.Write textId=%d,idxIndex=%d,idxPos=%d,fileIndex=%d,filePos=%d,length=%d",
+	ii.TextId,
+	idxIndex, idxPos,
+	ii.FileIndex, ii.FilePos, ii.Length)
+	*/
 	mapIndex(ii.TextId, idxPos)
 	indexPoses[idxIndex]++
 }
@@ -150,7 +151,7 @@ func Build() {
 	}
 	<-ok
 	end := time.Now()
-	log.Print(indexTree)
+	//log.Print(indexTree)
 	log.Printf("index.Build end and cost %.2fms", float64(end.Sub(start)/1000000))
 }
 

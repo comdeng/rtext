@@ -2,7 +2,7 @@ package socket
 
 import (
 	"bytes"
-	"log"
+	//"log"
 )
 
 type Response struct {
@@ -13,7 +13,7 @@ type Response struct {
 func (rs *Response) Encode() []byte {
 	var b bytes.Buffer
 	b.WriteByte(rs.Status)
-	log.Print(rs.Data)
+	//log.Print(rs.Data)
 	for k, v := range rs.Data {
 		b.WriteString(k)
 		b.WriteByte(0)

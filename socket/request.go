@@ -2,7 +2,7 @@ package socket
 
 import (
 	"bytes"
-	"log"
+	//"log"
 )
 
 type Request struct {
@@ -50,6 +50,6 @@ func (sr *Request) Decode(buf []byte) {
 		}
 	}
 
-	log.Println(sr.Url)
-	log.Println(sr.Data)
+	//log.Println(sr.Url)
+	//log.Println(sr.Data)
 }
