@@ -78,12 +78,7 @@ func (ii *IndexInfo) Write() {
 	idxPos := indexPoses[idxIndex]
 	path := getFilePath(idxIndex)
 
-	if idxPos == 0 {
-		fo, _ := os.Create(path)
-		fo.Close()
-	}
-
-	fh, err := os.Create(path)
+	fh, err := os.OpenFile(path, os.O_WRONLY|os.O_APPEND|os.O_CREATE, 0600)
 	if err != nil {
 		panic(err)
 	}
@@ -91,14 +86,15 @@ func (ii *IndexInfo) Write() {
 
 	bytes := ii.Encode()
 
-	log.Println(bytes)
-	log.Println(int64(idxPos * INDEX_ROW_LENGTH))
+	//log.Println(bytes)
+	//log.Println(int64(idxPos * INDEX_ROW_LENGTH))
+	//fh.Write(bytes)
 	fh.WriteAt(bytes, int64(idxPos*INDEX_ROW_LENGTH))
-	/*log.Printf("index.Write textId=%d,idxIndex=%d,idxPos=%d,fileIndex=%d,filePos=%d,length=%d",
-	ii.TextId,
-	idxIndex, idxPos,
-	ii.FileIndex, ii.FilePos, ii.Length)
-	*/
+	// log.Printf("index.Write textId=%d,idxIndex=%d,idxPos=%d,fileIndex=%d,filePos=%d,length=%d",
+	// 	ii.TextId,
+	// 	idxIndex, idxPos,
+	// 	ii.FileIndex, ii.FilePos, ii.Length)
+
 	mapIndex(ii.TextId, idxPos)
 	indexPoses[idxIndex]++
 }
@@ -145,23 +141,28 @@ func Build() {
 	start := time.Now()
 	indexTree = make(map[uint64]uint64)
 
-	ok := make(chan bool)
+	//nums := make([]chan uint64, INDEX_FILE_NUM)
 	for i := uint8(0); i < INDEX_FILE_NUM; i++ {
-		go buildFileIndexes(i, ok)
+		//nums[i] = make(chan uint64)
+		buildFileIndexes(i)
 	}
-	<-ok
+	//total := uint64(0)
+	//for _, num := range nums {
+	// 	total += <-num
+	// }
 	end := time.Now()
-	//log.Print(indexTree)
-	log.Printf("index.Build end and cost %.2fms", float64(end.Sub(start)/1000000))
+	// log.Print(indexTree)
+	log.Printf("index.Build end,cost %.2fms", float64(end.Sub(start)/1000000))
 }
 
-func buildFileIndexes(idxIndex uint8, ok chan bool) {
+func buildFileIndexes(idxIndex uint8) {
 	path := getFilePath(idxIndex)
 	fo, err := os.Open(path)
 	if err != nil {
 		return
 	}
 
+	//counter := uint64(0)
 	idxPos := uint64(0)
 	for {
 		bytes := make([]byte, TEXTID_BOUND_INDEX)
@@ -176,14 +177,16 @@ func buildFileIndexes(idxIndex uint8, ok chan bool) {
 			textId += (uint64(bytes[index]) << ((TEXTID_BOUND_INDEX - index - 1) << 3))
 		}
 
+		// indexTree[textId] = idxPos
 		mapIndex(textId, idxPos)
+		//counter++
 
 		// 从当前位置前移6位
 		fo.Seek(6, 1)
 
 		idxPos++
 	}
-	ok <- true
+	//num <- counter
 }
 
 // 检查索引是否存在

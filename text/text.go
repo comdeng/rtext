@@ -1,7 +1,7 @@
 package text
 
 import (
-	"log"
+	//"log"
 	"os"
 	"strconv"
 )
@@ -21,20 +21,13 @@ func Write(text []byte) (fIndex uint8, fPos uint32) {
 	}
 
 	path := getFilePath(fileIndex)
-	if filePos == 0 {
-		fc, err := os.Create(path)
-		if err != nil {
-			panic(err)
-		}
-		fc.Close()
-	}
 
-	fh, _ := os.Create(path)
+	fh, _ := os.OpenFile(path, os.O_WRONLY|os.O_APPEND|os.O_CREATE, 0600)
 	defer fh.Close()
 	fh.WriteAt(text, int64(filePos))
 	fPos = filePos
 
-	log.Printf("text.Write fileIndex=%d,filePos=%d,length=%d", fileIndex, filePos, len(text))
+	//log.Printf("text.Write fileIndex=%d,filePos=%d,length=%d", fileIndex, filePos, len(text))
 
 	filePos += uint32(len(text))
 	return
